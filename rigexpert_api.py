@@ -83,20 +83,30 @@ def main():
     ra = rigexpert_analyzer()
     ra.cfreq(13e6)
     ra.span(10e6)
-    f, r, x = ra.sweep(100)
+    f, r, x = ra.sweep(10)
     
+    z = r + 1j * x
+    z0 = 50
+    ref = abs((z - z0) / (z + z0))
+    vswr = (1 + ref) / (1 - ref)
+   
     
     with open('{}_ant{}.csv'.format(RADAR, ant), 'wb') as csvfile:
         csvwriter = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
 
-        csvwriter.writerow(['freq (MHz)', 'R (ohms)', 'X (ohms)'])
+        csvwriter.writerow(['freq (MHz)', 'vswr', 'R (ohms)', 'X (ohms)'])
         for i in range(len(f)):
-            csvwriter.writerow([f[i], r[i], x[i]])
+            csvwriter.writerow([f[i], vswr[i], r[i], x[i]])
 
-
-    
     ra.close()
-    plt.plot(
+    plt.plot(f, vswr)
+    plt.xlabel('frequency (MHz)')
+    plt.ylabel('VSWR')
+    plt.title('antenna {} VSWR'.format(ant))
+    axes = plt.gca()
+    axes.set_ylim([0, 10])
+    plt.savefig('{}_ant{}.png'.format(RADAR, ant)) 
+    plt.show()
     
 if __name__ == '__main__':
     main()
