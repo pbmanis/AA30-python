@@ -70,17 +70,19 @@ class REAA30():
         # parameters for "band" scans
         # bands are defined by a name, and a list with the cf, span, and nfreq parameters
         self.bands = OrderedDict([
-                             ('Full', [2.00, 30.0, 200]),
-                             ('80cw', [3.480, 3.620, 30]), ('75ph', [3.700, 4.000, 30]), ('80', [3.50, 4.0, 50]),
-                             ('60', [5.00, 5.2, 10]),
-                             ('40cw', [6.980, 7.150, 50]), ('40ph', [7.100, 7.300, 51]), ('40', [7.000, 7.300, 50]),
-                             ('30', [10.080, 10.170, 25]),
-                             ('20cw', [13.980, 14.120, 25]), ('20ph', [14.100, 14.350, 50]), ('20', [14.000, 14.350, 50]),
-                             ('17', [18.060, 18.180, 20]), ('15', [20.980, 21.470, 50]), ('12', [24.87, 24.960, 20]),
-                             ('10cw', [27.980, 29.720, 25]), ('10ph', [28.5, 29.7, 25]), ('10', [28.0, 29.7, 100]),
-                             ('all', None), ('cw', None), ('ph', None),
+                             ('HF', [2.00, 30.0, 200]),
+                             ('80cw', [3.480, 3.620, 30]), ('75ph', [3.700, 4.000, 30]), ('80full', [3.50, 4.0, 100]),
+                             ('60full', [5.00, 5.2, 10]),
+                             ('40cw', [6.980, 7.150, 50]), ('40ph', [7.100, 7.300, 51]), ('40full', [7.000, 7.300, 100]),
+                             ('30full', [10.080, 10.170, 25]),
+                             ('20cw', [13.980, 14.120, 25]), ('20ph', [14.100, 14.350, 50]), ('20full', [14.000, 14.350, 100]),
+                             ('17full', [18.060, 18.180, 24]), 
+                             ('15cw', [20.980, 21.150, 50]), ('15ph', [21.150, 21.470, 50]), ('15full', [20.980, 21.470, 100]),
+                             ('12full', [24.87, 24.960, 30]),
+                             ('10cw', [27.980, 28.320, 50]), ('10ph', [28.280, 28.520, 50]), ('10full', [28.0, 29.7, 100]),
+                             ('All', None), ('CW', None), ('PH', None),
                              ])
-        self.band_select = '80cw'
+        self.band_select = 'HF'
         self.stopscan = False
         self.color_index = 0
         self.in_sampling = False
@@ -96,15 +98,19 @@ class REAA30():
         ConnectionError
             Exception is raised when port connection fails (no device)
         """
+        print("findport: ")
         ports = find_serial_device_ports() # Returns list of available serial ports
         # signature for AA-30: '/dev/cu.usbserial-2230'
-        aa_30_port = '/dev/cu.usbserial-2230'
+        aa_30_port = '/dev/cu.usbserial-220'
+        print("ports: ", ports)
         if aa_30_port in ports:
 
             try:
                 self.re_sp = serial.Serial(aa_30_port,  # when plugged into the right side port
                     bytesize=8, parity='N', stopbits=1, baudrate=38400, timeout=3)
             except:
+                raise ConnectionError('Did not find a serial port connected to an AA-30')
+            if self.re_sp is None:
                 raise ConnectionError('Did not find a serial port connected to an AA-30')
 
         
@@ -192,7 +198,7 @@ class REAA30():
                 continue
             self.pl[p].setXRange(fmin, fmax)
             self.pl[p].getAxis('left').setStyle(stopAxisAtTick=(True, True))
-            self.pl[p].getAxis('bottom').setStyle(stopAxisAtTick=(True, False))
+            self.pl[p].getAxis('bottom').setStyle(stopAxisAtTick=(True, True))
             self.pl[p].setLabels(bottom='F (MHz)')
         self.pl['TDR'].setXRange(0., 0.5)
         self.pl['TDR'].setLabels(bottom='T (usec)')
@@ -295,7 +301,7 @@ class REAA30():
                 self.InfoText = data
             if path[1] == 'Presets':
                 self.band_select = data
-                # print('band select data: ', data)
+                print('band select data: ', data)
             #
             # Actions:
             #
@@ -308,32 +314,33 @@ class REAA30():
                 self.repeat_scan()
                 
             if path[1] == 'Start Preset Scans':
-                if self.band_select in ['cw']:
-                    for b in self.bands.keys():
-                        if b in self.band_find('ph') or self.bands[b] is None:
-                            continue
-                        (fr, rx, zx, rtl) = self.re_sample(start_freq=self.bands[b][0], end_freq=self.bands[b][1],
-                            nfreq=self.bands[b][2])
-                        self.color_index += 1
-                elif self.band_select in ['ph']:
-                    for b in self.bands.keys():
-                        if b in self.band_find('cw') or self.bands[b] is None:
-                            continue
-                        (fr, rx, zx, rtl) = self.re_sample(start_freq=self.bands[b][0], end_freq=self.bands[b][1],
-                            nfreq=self.bands[b][2])
-                        self.color_index += 1
-                elif self.band_select in ['all']:
-                    for b in self.bands.keys():
-                        if self.bands[b] is None:  # skip non-specific flags
-                            continue
-                        (fr, rx, zx, rtl) = self.re_sample(start_freq=self.bands[b][0], end_freq=self.bands[b][1],
-                            nfreq=self.bands[b][2])
-                        self.color_index += 1
-                else:
+                if self.band_select.endswith(('cw', 'ph', 'full', "HF")):
                     b = self.band_select
+                    print("b: ", b)                    
                     (fr, rx, zx, rtl) = self.re_sample(start_freq=self.bands[b][0], end_freq=self.bands[b][1],
                         nfreq=self.bands[b][2])
                     self.color_index += 1
+                elif self.band_select == "All":
+                    for b in self.bands.keys():
+                        if b.endswith(("full")):  # only do "full" band scans
+                            (fr, rx, zx, rtl) = self.re_sample(start_freq=self.bands[b][0], end_freq=self.bands[b][1],
+                                nfreq=self.bands[b][2])
+                    self.color_index += 1
+                elif self.band_select == "CW":
+                    for b in self.bands.keys():
+                        if b.endswith(("cw")):  # only do "full" band scans
+                            (fr, rx, zx, rtl) = self.re_sample(start_freq=self.bands[b][0], end_freq=self.bands[b][1],
+                                nfreq=self.bands[b][2])
+                    self.color_index += 1
+                elif self.band_select == "PH":
+                    for b in self.bands.keys():
+                        if b.endswith(("ph")):  # only do "full" band scans
+                            (fr, rx, zx, rtl) = self.re_sample(start_freq=self.bands[b][0], end_freq=self.bands[b][1],
+                                nfreq=self.bands[b][2])
+                    self.color_index += 1
+                else:
+                    print("Band Select is not Mapped: ", self.band_select)
+                    return
 
             if path[1] == 'Stop Scan':
                 self.done = True
@@ -345,7 +352,7 @@ class REAA30():
             # if path[1] == 'Continue':
             #     self.continueRun()
             if path[1] == 'Save Scan':
-                pass # self.storeData()
+                self.storeData()
             if path[1] == 'Load Scan':
                 pass
                 fn = self.getFilename()
@@ -384,10 +391,11 @@ class REAA30():
             nominal load resistance (x = 0), optional
             by default 50.
         """
+        z0c = complex(z0, 0.0)
         rho = np.zeros(len(re))
         for i in range(len(re)):
-            z = np.complex(re[i], im[i])
-            rho[i] = np.abs((z - z0)/(z + z0))
+            z = complex(re[i], im[i])
+            rho[i] = np.abs((z - z0c)/(z + z0c))
             if np.abs(rho[i] - 1) < 1e-3:
                 rho[i] = 1e-3
         swr = (1.0 + rho)/(1.0 - rho)
@@ -533,7 +541,7 @@ class REAA30():
             self.in_sampling = False
             raise Exception('Failed to set frequency')
 #        print ('FQ command returned: {:s}'.format(r))
-        time.sleep(0.01)
+        time.sleep(0.05)
         self.send_re('sw%d' % int(span*1e6))
         r = self.get_re()
         if r not in ['OK']:
@@ -542,7 +550,7 @@ class REAA30():
             self.in_sampling = False
             raise Exception('Failed to set sweep range')
 #        print ('Command SW returned: ', r)
-        time.sleep(0.01)
+        time.sleep(0.02)
         self.send_re('FRX%d' % nfreq)
         r = self.get_re()
         if r not in ['OK']:
@@ -648,7 +656,9 @@ class REAA30():
             else:
                 break
         return bytes(line)
-        
+
+    def storeData(self):
+        raise NotImplementedError
 def main():
     app = REAA30()
 
